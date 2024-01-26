@@ -3,19 +3,45 @@ import os
 import subprocess
 import discord
 import platform
+import docker
+import requests
 from discord.ext import commands
 from dotenv import load_dotenv
 
 load_dotenv()  # take environment variables from .env
 
+client = docker.from_env()
+image, build_logs = client.images.build(path=".", tag="shortlang_image", rm=True)
+
+
+class MyBot(commands.Bot):
+    def __init__(self, **kwargs):
+        super().__init__(
+            command_prefix=commands.when_mentioned_or("-"),
+            case_insensitive=True,
+            intents=kwargs.pop("intents", discord.Intents.all()),
+            allowed_mentions=discord.AllowedMentions(roles=False, users=False, everyone=False),
+        )
+
+    async def is_owner(self, user: discord.User):
+        if user.id == 655020762796654592:
+            return True
+        else:
+            return False
+    
+    async def on_command_error(self, ctx: commands.Context, error: commands.CommandError):
+        """The event triggered when an error is raised while invoking a command."""
+        await ctx.reply(str(error))
+
+
 intents = discord.Intents.default()
 intents.message_content = True
-allowed_mentions = discord.AllowedMentions(roles=False, users=False, everyone=False)
-bot = commands.Bot(command_prefix='-', intents=intents, allowed_mentions=allowed_mentions)
-
+bot = MyBot(intents=intents)
+    
 
 @bot.event
 async def on_ready():
+    await bot.load_extension("jishaku")
     print(f'Logged in as {bot.user} (ID: {bot.user.id})')
     print('------')
 
@@ -24,40 +50,38 @@ async def on_ready():
 async def run(ctx, *, code: str):
     """Runs a block of ShortLang code"""
 
-    code = code.replace('```', '')
-    with open("program.sl", "w") as f:
-        f.writelines(code)
+    if ctx.author.id != 655020762796654592:
+        return await ctx.reply("You are not allowed to use this command.")
 
-    command = "shortlang"
-    if platform.system() == "Windows":
-        command += ".exe"
+    code = code.replace('```', '')
 
     try:
-        process = await asyncio.create_subprocess_shell(
-            f"{command} program.sl",
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            limit=4096  # Set a reasonable limit for the output
-        )
+        # Build Docker image
+        image, build_logs = client.images.build(path=".", tag="shortlang_image", rm=True)
+        
+        # Run Docker container with a timeout and create file with code
+        container = client.containers.run("shortlang_image", f"echo '{code}' | shortlang", detach=True, stderr=True)
 
-        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=5)
+        # Wait for the container to finish execution with a timeout
+        result = container.wait(timeout=5)
 
-        if process.returncode is None:
-            process.terminate()
-            raise asyncio.TimeoutError("Process timed out.")
+        # If the container didn't finish execution within the timeout, stop it
+        if result['StatusCode'] != 0:
+            container.stop()
+            
+        # Fetch the stdout and stderr
+        stdout = container.logs(stdout=True, stderr=False).decode()
+        stderr = container.logs(stdout=False, stderr=True).decode()
 
-        # response = f"**Output:**\n```\n{stdout.decode()[:1500]}\n```\n**Error:**\n```\n{stderr.decode()}\n```"
-
+        # Create the embed
         embed = discord.Embed(color=discord.colour.parse_hex_number("8080FF"))
-        stdout = stdout.decode()
 
         if len(stdout) != 0:
-            output = f"```\n{stdout.decode()[:1500]}\n```"
+            output = f"```\n{stdout[:1500]}\n```"
         else:
             output = "*No output.*"
 
         embed.add_field(name="Program Output", value=output, inline=False)
-        stderr = stderr.decode()
 
         if len(stderr) != 0:
             embed.add_field(name="Compiler output", value=f"```\n{stderr[:500]}\n```", inline=False)
@@ -65,8 +89,7 @@ async def run(ctx, *, code: str):
 
         await ctx.reply(embed=embed)
 
-    except asyncio.TimeoutError:
-        await ctx.reply("The process timed out.")
-
+    except requests.exceptions.ConnectionError:
+        await ctx.reply("The program took too long to execute.")
 
 bot.run(os.getenv("DISCORD_TOKEN"))
