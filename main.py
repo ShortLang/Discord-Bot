@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 load_dotenv()  # take environment variables from .env
 
 client = docker.from_env()
-image, build_logs = client.images.build(path=".", tag="shortlang_image", rm=True)
+client.images.build(path=".", tag="shortlang_image", rm=True)
 
 
 class MyBot(commands.Bot):
@@ -62,7 +62,7 @@ async def on_ready():
 
 @bot.command()
 async def run(ctx, *, code: str = None):
-    """Runs the given ShortLang code."""
+    """Runs the given ShortLang code"""
 
     if ctx.message.attachments:
         # If a file was sent, download it and read its content
@@ -73,9 +73,6 @@ async def run(ctx, *, code: str = None):
         code = code.replace('```', '').replace("'", '"')
 
     try:
-        # Build Docker image
-        client.images.build(path=".", tag="shortlang_image", rm=True)
-        
         # Run Docker container with a timeout and create file with code
         container = client.containers.run("shortlang_image", ["bash", "-c", f"echo '{code}' | shortlang"], detach=True, stderr=True)
 
@@ -108,5 +105,6 @@ async def run(ctx, *, code: str = None):
 
     except requests.exceptions.ConnectionError:
         await ctx.reply("The program took too long to execute.")
+
 
 bot.run(os.getenv("DISCORD_TOKEN"))
