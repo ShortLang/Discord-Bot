@@ -1,8 +1,5 @@
-import asyncio
 import os
-import subprocess
 import discord
-import platform
 import docker
 import requests
 from discord.ext import commands
@@ -37,6 +34,22 @@ class MyBot(commands.Bot):
 intents = discord.Intents.default()
 intents.message_content = True
 bot = MyBot(intents=intents)
+
+
+class CustomHelpCommand(commands.MinimalHelpCommand):
+    def get_command_signature(self, command):
+        return f'{command.qualified_name} {command.signature}'
+
+    async def send_bot_help(self, mapping):
+        embed = discord.Embed(title='Commands', color=discord.Color.blue(), description="For help with a specific command, type `-help <command>`")
+        for command in self.context.bot.commands:
+            if command.qualified_name == "jishaku": continue
+            if not command.hidden:
+                embed.add_field(name=f'{self.get_command_signature(command)}', value=f"```{command.help or 'No description'}```", inline=False)
+        await self.get_destination().send(embed=embed)
+
+
+bot.help_command = CustomHelpCommand()
     
 
 @bot.event
@@ -45,22 +58,26 @@ async def on_ready():
     print(f'Logged in as {bot.user} (ID: {bot.user.id})')
     print('------')
 
+    await bot.change_presence(activity=discord.Game(name="Use -help for usage!"))
 
 @bot.command()
-async def run(ctx, *, code: str):
-    """Runs a block of ShortLang code"""
+async def run(ctx, *, code: str = None):
+    """Runs the given ShortLang code."""
 
-    if ctx.author.id != 655020762796654592:
-        return await ctx.reply("You are not allowed to use this command.")
-
-    code = code.replace('```', '')
+    if ctx.message.attachments:
+        # If a file was sent, download it and read its content
+        file = await ctx.message.attachments[0].read()
+        code = file.decode()
+    else:
+        # If no file was sent, use the provided code
+        code = code.replace('```', '').replace("'", '"')
 
     try:
         # Build Docker image
-        image, build_logs = client.images.build(path=".", tag="shortlang_image", rm=True)
+        client.images.build(path=".", tag="shortlang_image", rm=True)
         
         # Run Docker container with a timeout and create file with code
-        container = client.containers.run("shortlang_image", f"echo '{code}' | shortlang", detach=True, stderr=True)
+        container = client.containers.run("shortlang_image", ["bash", "-c", f"echo '{code}' | shortlang"], detach=True, stderr=True)
 
         # Wait for the container to finish execution with a timeout
         result = container.wait(timeout=5)
@@ -68,7 +85,7 @@ async def run(ctx, *, code: str):
         # If the container didn't finish execution within the timeout, stop it
         if result['StatusCode'] != 0:
             container.stop()
-            
+
         # Fetch the stdout and stderr
         stdout = container.logs(stdout=True, stderr=False).decode()
         stderr = container.logs(stdout=False, stderr=True).decode()
