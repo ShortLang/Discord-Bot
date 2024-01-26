@@ -64,6 +64,9 @@ async def on_ready():
 async def run(ctx, *, code: str = None):
     """Runs the given ShortLang code"""
 
+    # Add a reaction to the message to indicate that the bot is processing the command
+    await ctx.message.add_reaction('⏳')
+
     if ctx.message.attachments:
         # If a file was sent, download it and read its content
         file = await ctx.message.attachments[0].read()
@@ -72,39 +75,42 @@ async def run(ctx, *, code: str = None):
         # If no file was sent, use the provided code
         code = code.replace('```', '').replace("'", '"')
 
+    # Run Docker container with a timeout and create file with code
+    container = client.containers.run("shortlang_image", ["bash", "-c", f"echo '{code}' | shortlang"], detach=True, stderr=True)
+    
     try:
-        # Run Docker container with a timeout and create file with code
-        container = client.containers.run("shortlang_image", ["bash", "-c", f"echo '{code}' | shortlang"], detach=True, stderr=True)
-
         # Wait for the container to finish execution with a timeout
         result = container.wait(timeout=5)
-
-        # If the container didn't finish execution within the timeout, stop it
-        if result['StatusCode'] != 0:
-            container.stop()
-
-        # Fetch the stdout and stderr
-        stdout = container.logs(stdout=True, stderr=False).decode()
-        stderr = container.logs(stdout=False, stderr=True).decode()
-
-        # Create the embed
-        embed = discord.Embed(color=discord.colour.parse_hex_number("8080FF"))
-
-        if len(stdout) != 0:
-            output = f"```\n{stdout[:1500]}\n```"
-        else:
-            output = "*No output.*"
-
-        embed.add_field(name="Program Output", value=output, inline=False)
-
-        if len(stderr) != 0:
-            embed.add_field(name="Compiler output", value=f"```\n{stderr[:500]}\n```", inline=False)
-            embed.color = discord.colour.parse_hex_number("FF0000")
-
-        await ctx.reply(embed=embed)
-
     except requests.exceptions.ConnectionError:
-        await ctx.reply("The program took too long to execute.")
+        embed = discord.Embed(color=discord.colour.parse_hex_number("FF0000"))
+        embed.add_field(name="Error Output", value="```Error: The program took too long to execute.```", inline=False)
+        await ctx.message.remove_reaction('⏳', bot.user)
+        return await ctx.reply(embed=embed)
+
+    # If the container didn't finish execution within the timeout, stop it
+    if result['StatusCode'] != 0:
+        container.stop()
+
+    # Fetch the stdout and stderr
+    stdout = container.logs(stdout=True, stderr=False).decode()
+    stderr = container.logs(stdout=False, stderr=True).decode()
+
+    # Create the embed
+    embed = discord.Embed(color=discord.colour.parse_hex_number("8080FF"))
+
+    if len(stdout) != 0:
+        output = f"```{stdout[:1010]}```"
+    else:
+        output = "*No output.*"
+
+    embed.add_field(name="Program Output", value=output, inline=False)
+
+    if len(stderr) != 0:
+        embed.add_field(name="Error Output", value=f"```{stderr[:1010]}```", inline=False)
+        embed.color = discord.colour.parse_hex_number("FF0000")
+
+    await ctx.reply(embed=embed)
+    await ctx.message.remove_reaction('⏳', bot.user)
 
 
 bot.run(os.getenv("DISCORD_TOKEN"))
