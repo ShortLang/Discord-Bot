@@ -1,7 +1,6 @@
 import os
 import discord
 import docker
-import requests
 from discord.ext import commands
 from dotenv import load_dotenv
 
@@ -21,10 +20,7 @@ class MyBot(commands.Bot):
         )
 
     async def is_owner(self, user: discord.User):
-        if user.id == 655020762796654592:
-            return True
-        else:
-            return False
+        return user.id == 655020762796654592
     
     async def on_command_error(self, ctx: commands.Context, error: commands.CommandError):
         """The event triggered when an error is raised while invoking a command."""
@@ -40,7 +36,7 @@ class CustomHelpCommand(commands.MinimalHelpCommand):
     def get_command_signature(self, command):
         return f'{command.qualified_name} {command.signature}'
 
-    async def send_bot_help(self, mapping):
+    async def send_bot_help(self, _mapping):
         embed = discord.Embed(title='Commands', color=discord.Color.blue(), description="For help with a specific command, type `-help <command>`")
         for command in self.context.bot.commands:
             if command.qualified_name == "jishaku": continue
@@ -59,6 +55,7 @@ async def on_ready():
     print('------')
 
     await bot.change_presence(activity=discord.Game(name="Use -help for usage!"))
+
 
 @bot.command()
 async def run(ctx, *, code: str = None):
@@ -81,7 +78,7 @@ async def run(ctx, *, code: str = None):
     try:
         # Wait for the container to finish execution with a timeout
         result = container.wait(timeout=5)
-    except requests.exceptions.ConnectionError:
+    except:
         embed = discord.Embed(color=discord.colour.parse_hex_number("FF0000"))
         embed.add_field(name="Error Output", value="```Error: The program took too long to execute.```", inline=False)
         await ctx.message.remove_reaction('⏳', bot.user)
@@ -97,12 +94,7 @@ async def run(ctx, *, code: str = None):
 
     # Create the embed
     embed = discord.Embed(color=discord.colour.parse_hex_number("8080FF"))
-
-    if len(stdout) != 0:
-        output = f"```{stdout[:1010]}```"
-    else:
-        output = "*No output.*"
-
+    output = f"```{stdout[:1010]}```" if len(stdout) != 0 else "*No output.*"
     embed.add_field(name="Program Output", value=output, inline=False)
 
     if len(stderr) != 0:
