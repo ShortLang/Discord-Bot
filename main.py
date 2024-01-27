@@ -27,7 +27,10 @@ class MyBot(commands.Bot):
 
     async def on_command_error(self, ctx: commands.Context, error: commands.CommandError):
         """The event triggered when an error is raised while invoking a command."""
-        await ctx.reply(str(error))
+        try:
+            await ctx.reply(str(error))
+        except:
+            print(error)
 
 
 intents = discord.Intents.default()
@@ -97,8 +100,7 @@ async def run(ctx, *, code: str = None):
     if isinstance(container, str):
         # If the container returned a string, it's an error message
         embed = discord.Embed(color=discord.colour.parse_hex_number("FF0000"))
-        embed.add_field(name="Error Output", value="```" +
-                        container + "```", inline=False)
+        embed.add_field(name="Error Output", value="```" + container + "```", inline=False)
         await ctx.message.remove_reaction('⏳', bot.user)
         return await ctx.reply(embed=embed)
 
