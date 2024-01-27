@@ -73,7 +73,7 @@ async def run(ctx, *, code: str = None):
         code = code.replace('```', '').replace("'", '"')
 
     # Run Docker container with a timeout and create file with code
-    container = client.containers.run("shortlang_image", ["bash", "-c", f"echo '{code}' | shortlang"], detach=True, stderr=True)
+    container = client.containers.run("shortlang_image", ["bash", "-c", f"echo '{code}' | shortlang -s"], detach=True, stderr=True)
     
     try:
         # Wait for the container to finish execution with a timeout
