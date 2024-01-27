@@ -59,7 +59,7 @@ bot.help_command = CustomHelpCommand()
 
 def run_container(code):
     container = client.containers.run("shortlang_image", [
-                                      "bash", "-c", f"echo '{code}' | shortlang -s"], detach=True, stderr=True)
+                                      "bash", "-c", f"echo '{code}' | shortlang"], detach=True, stderr=True)
     try:
         result = container.wait(timeout=5)
     except:
