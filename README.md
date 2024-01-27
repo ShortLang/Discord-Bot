@@ -8,7 +8,7 @@ The bot creates a new Docker container for each program that is run,
 so you don't have to worry about someone nuking your PC.
 
 ## Usage
-To use the bot, you can either join the ShortLang Discord server [here](https://discord.gg/9Q6JZuY) or host it yourself.
+To use the bot, you can either join the ShortLang Discord server [here](https://discord.gg/WsYJBFB6B3) or host it yourself.
 Please refer to the [installation](#installation) section for more information.
 
 ## Installation
