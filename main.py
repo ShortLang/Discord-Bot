@@ -1,4 +1,6 @@
 import os
+
+import asyncio
 import discord
 import docker
 from discord.ext import commands
@@ -16,12 +18,13 @@ class MyBot(commands.Bot):
             command_prefix=commands.when_mentioned_or("-"),
             case_insensitive=True,
             intents=kwargs.pop("intents", discord.Intents.all()),
-            allowed_mentions=discord.AllowedMentions(roles=False, users=False, everyone=False),
+            allowed_mentions=discord.AllowedMentions(
+                roles=False, users=False, everyone=False),
         )
 
     async def is_owner(self, user: discord.User):
         return user.id == 655020762796654592
-    
+
     async def on_command_error(self, ctx: commands.Context, error: commands.CommandError):
         """The event triggered when an error is raised while invoking a command."""
         await ctx.reply(str(error))
@@ -37,16 +40,31 @@ class CustomHelpCommand(commands.MinimalHelpCommand):
         return f'{command.qualified_name} {command.signature}'
 
     async def send_bot_help(self, _mapping):
-        embed = discord.Embed(title='Commands', color=discord.Color.blue(), description="For help with a specific command, type `-help <command>`")
+        embed = discord.Embed(title='Commands', color=discord.Color.blue(),
+                              description="For help with a specific command, type `-help <command>`")
         for command in self.context.bot.commands:
-            if command.qualified_name == "jishaku": continue
+            if command.qualified_name == "jishaku":
+                continue
             if not command.hidden:
-                embed.add_field(name=f'{self.get_command_signature(command)}', value=f"```{command.help or 'No description'}```", inline=False)
+                embed.add_field(name=f'{self.get_command_signature(command)}',
+                                value=f"```{command.help or 'No description'}```", inline=False)
         await self.get_destination().send(embed=embed)
 
 
 bot.help_command = CustomHelpCommand()
-    
+
+
+def run_container(code):
+    container = client.containers.run("shortlang_image", [
+                                      "bash", "-c", f"echo '{code}' | shortlang -s"], detach=True, stderr=True)
+    try:
+        result = container.wait(timeout=5)
+    except:
+        return "Error: The program took too long to execute."
+    if result['StatusCode'] != 0:
+        container.stop()
+    return container
+
 
 @bot.event
 async def on_ready():
@@ -72,21 +90,17 @@ async def run(ctx, *, code: str = None):
         # If no file was sent, use the provided code
         code = code.replace('```', '').replace("'", '"')
 
-    # Run Docker container with a timeout and create file with code
-    container = client.containers.run("shortlang_image", ["bash", "-c", f"echo '{code}' | shortlang -s"], detach=True, stderr=True)
-    
-    try:
-        # Wait for the container to finish execution with a timeout
-        result = container.wait(timeout=5)
-    except:
+    # Run the container in a separate thread to avoid blocking
+    loop = asyncio.get_event_loop()
+    container = await loop.run_in_executor(None, run_container, code)
+
+    if isinstance(container, str):
+        # If the container returned a string, it's an error message
         embed = discord.Embed(color=discord.colour.parse_hex_number("FF0000"))
-        embed.add_field(name="Error Output", value="```Error: The program took too long to execute.```", inline=False)
+        embed.add_field(name="Error Output", value="```" +
+                        container + "```", inline=False)
         await ctx.message.remove_reaction('⏳', bot.user)
         return await ctx.reply(embed=embed)
-
-    # If the container didn't finish execution within the timeout, stop it
-    if result['StatusCode'] != 0:
-        container.stop()
 
     # Fetch the stdout and stderr
     stdout = container.logs(stdout=True, stderr=False).decode()
