@@ -1,5 +1,5 @@
-# Use Ubuntu as the base image
-FROM ubuntu:latest
+# Use Apline as the base image
+FROM alpine:latest
 
 # Set the working directory inside the container
 WORKDIR /app
