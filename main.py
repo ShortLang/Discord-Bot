@@ -1,9 +1,9 @@
 import os
-
 import asyncio
 import discord
 import docker
-from discord.ext import commands
+
+from discord.ext import commands, tasks
 from dotenv import load_dotenv
 
 load_dotenv()  # take environment variables from .env
@@ -31,6 +31,14 @@ class MyBot(commands.Bot):
             await ctx.reply(str(error))
         except:
             print(error)
+
+    async def setup_hook(self) -> None:
+        self.presence.start()
+
+    @tasks.loop(hours=1)
+    async def presence(self):
+        await self.wait_until_ready()
+        await self.change_presence(activity=discord.Game(name="Use -help for usage!"))
 
 
 intents = discord.Intents.default()
@@ -74,8 +82,6 @@ async def on_ready():
     await bot.load_extension("jishaku")
     print(f'Logged in as {bot.user} (ID: {bot.user.id})')
     print('------')
-
-    await bot.change_presence(activity=discord.Game(name="Use -help for usage!"))
 
 
 @bot.command()
